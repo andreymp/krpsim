@@ -126,6 +126,10 @@ def simulate(
             break
 
         cycle_nbr += 1
+
+        if cycle_nbr == delay:
+            print("Timeout :(")
+            break
     
     return timeline, stocks, cycle_nbr
 
