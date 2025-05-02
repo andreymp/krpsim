@@ -2,7 +2,7 @@ import sys
 
 from collections import defaultdict
 from typing import Dict, Tuple, List
-from common import Process, parse
+from common import Process, parse_config
 
 def simulate(
         stocks: Dict[str, int], 
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         sys.exit()
     
     delay: int = int(sys.argv[2])
-    stocks, processes, optimize_targets = parse(config_file)
+    stocks, processes, optimize_targets = parse_config(config_file)
     print(f"Nice file! {len(processes)} processes, {len(stocks)} stocks, {len(optimize_targets)} to optimize")
     timeline, stocks, cycle_nbr = simulate(stocks, processes, optimize_targets, delay)
     print("Evaluating .................. done.")

@@ -10,7 +10,7 @@ class Process:
         self.delay: int = delay
         self.start_times: List[int] = []
 
-def parse(config_file: str) -> Tuple[Dict[str, int], List[Process], List[str]]:
+def parse_config(config_file: str) -> Tuple[Dict[str, int], List[Process], List[str]]:
     stocks: Dict[str, int] = {}
     processes: List[Process] = []
     optimize_targets: List[str] = []
