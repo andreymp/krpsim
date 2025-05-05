@@ -1,0 +1,4 @@
+0:equipment_purchase
+10:product_creation
+40:Delivery
+60

@@ -1,72 +1,94 @@
 import sys
+import heapq
 
-from collections import defaultdict
 from typing import Dict, Tuple, List
 from common import Process, parse_config
+
+def can_run_process(process: Process, stocks: Dict[str, int]) -> bool:
+    return all(stocks.get(name, 0) >= qty for name, qty in process.needs.items())
+
+def count_score(process: Process, optimize_targets: List[str]) -> int:
+    score: int = 0
+    
+    for target in optimize_targets:
+        if target == "time":
+            continue
+        score += 100 * process.results.get(target, 0)
+    
+    score += 10 * sum(process.results.values())
+    score -= process.delay
+    score -= 5 * sum(process.needs.values())
+    return score
+
+def run_process(
+        process: Process, 
+        stocks: Dict[str, int], 
+        processes_in_progress: List[Tuple[int, Process]],
+        cycle_nbr: int,
+        timeline: List[Tuple[int, str]]
+) -> None:
+    for name, qty in process.needs.items():
+        stocks[name] -= qty
+    
+    heapq.heappush(processes_in_progress, (cycle_nbr + process.delay, process))
+    timeline.append((cycle_nbr, process.name))
 
 def simulate(
         stocks: Dict[str, int], 
         processes: List[Process],   
         optimize_targets: List[str], 
         delay: int
-) -> Tuple[defaultdict[list], Dict[str, int], int]:
+) -> Tuple[List[Tuple[int, str]], Dict[str, int], int]:
     cycle_nbr: int = 0
-    timeline = defaultdict(list)
-    event_in_progress: List[Tuple[int, Process]] = []
+    timeline: List[Tuple[int, str]] = []
+    processes_in_progress: List[Tuple[int, Process]] = []
 
     while cycle_nbr < delay:
-        # finishing the processes
-        process_stopped: bool = False
-        for end_cycle, process in list(event_in_progress):
-            if (end_cycle == cycle_nbr):
-                for name, qty in process.results.items():
-                    stocks[name] = stocks.get(name, 0) + qty
-                event_in_progress.remove((end_cycle, process))
-                process_stopped = True
-        
-        # looking for processes to start
-        process_started:  bool = False
-        for process in processes:
-            if all(stocks.get(name, 0) >= qty for name, qty in process.needs.items()):
-                # optimize targets process
-                for target in optimize_targets:
-                    if process.results.get(target, 0):
-                        for name, qty in process.needs.items():
-                            stocks[name] -= qty
-                        process.start_times.append(cycle_nbr)
-                        event_in_progress.append((cycle_nbr + process.delay, process))
-                        timeline[cycle_nbr].append(process.name) 
-                        process_started = True
+        terminate_ongoing_processes(processes_in_progress, cycle_nbr, stocks)
+        ready_to_start_processes: List[Process] = [ proc for proc in processes if can_run_process(proc, stocks) ]
 
-                # start the process
-                if not process_started:
-                    for name, qty in process.needs.items():
-                            stocks[name] -= qty
-                    process.start_times.append(cycle_nbr)
-                    event_in_progress.append((cycle_nbr + process.delay, process))
-                    timeline[cycle_nbr].append(process.name) 
-                    process_started = True
-                
-        if not process_stopped and not process_started and not event_in_progress:
+        if not ready_to_start_processes and not processes_in_progress:
             break
 
+        if ready_to_start_processes:
+            ready_to_start_processes.sort(key=lambda proc: count_score(proc, optimize_targets), reverse=True)
+            for process in ready_to_start_processes:
+                while can_run_process(process, stocks):
+                    run_process(process, stocks, processes_in_progress, cycle_nbr, timeline)
+        
         cycle_nbr += 1
-
         if cycle_nbr == delay:
             print("Timeout :(")
-            break
     
     return timeline, stocks, cycle_nbr
 
-def show(timeline: defaultdict[list], stocks: Dict[str, int], cycle_nbr: int) -> None:
+def show(timeline: List[Tuple[int, str]], stocks: Dict[str, int], cycle_nbr: int) -> None:
     print("Main walk")
-    for time in sorted(timeline.keys()):
-        for process in timeline[time]:
-            print(f"{time}:{process}")
-    print(f"no more process doable at time {cycle_nbr}")
+
+    with open("public/result_set.txt", "w") as result_set:
+        for time, process_name in timeline:
+            line: str = f"{time}:{process_name}"
+            result_set.write(f"{line}\n")
+            print(line)
+    
+        result_set.write(f"{cycle_nbr}\n")
+        print(f"no more process doable at time {cycle_nbr}")
+    
     print("Stock :")
     for name, qty in stocks.items():
         print(f"{name} => {qty}")
+
+def terminate_ongoing_processes(
+        processes_in_progress: List[Tuple[int, Process]],
+        cycle_nbr: int,
+        stocks: Dict[str, int]
+) -> None:
+    while processes_in_progress and processes_in_progress[0][0] == cycle_nbr:
+        _, process = heapq.heappop(processes_in_progress)
+        
+        for name, qty in process.results.items():
+            print('here')
+            stocks[name] = stocks.get(name, 0) + qty
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
