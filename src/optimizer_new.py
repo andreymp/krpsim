@@ -478,25 +478,28 @@ class UniversalOptimizer:
         # Check if this resource gatherer produces something critically needed
         produces_critical_input = False
         if is_resource_gatherer:
-            # Check if we have enough euro reserved for value chain execution
-            current_euro = current_stocks.get('euro', 0) if 'euro' in self._stock_targets else float('inf')
-            euro_reserve = self._get_effective_reserve('euro', current_cycle)
-            has_enough_euro_reserve = current_euro >= euro_reserve
+            # Check if we have enough target resources reserved
+            has_enough_reserve = True
+            for target in self._stock_targets:
+                if target in process.needs:
+                    current_target = current_stocks.get(target, 0)
+                    target_reserve = self._get_effective_reserve(target, current_cycle)
+                    if current_target < target_reserve:
+                        has_enough_reserve = False
+                        break
             
-            # Only allow resource gathering if we have enough euro reserved OR this produces critical input
+            # Allow if we have reserves OR produces critical input
             for resource in process.results:
                 if resource in self._value_chain_resources:
-                    # Check if this resource is critically low
                     current_stock = current_stocks.get(resource, 0)
-                    # Check if any process in value chain needs this resource and we don't have enough
                     needed_amount = 0
                     for proc_name in self._intermediate_needs:
                         if resource in self._intermediate_needs[proc_name]:
                             needed_amount += self._intermediate_needs[proc_name][resource] * 20
                     
                     if needed_amount > 0 and current_stock < needed_amount:
-                        # Only mark as critical if we have euro reserve OR this doesn't cost euro
-                        if has_enough_euro_reserve or 'euro' not in process.needs:
+                        consumes_target = any(t in process.needs for t in self._stock_targets)
+                        if has_enough_reserve or not consumes_target:
                             produces_critical_input = True
                         break
         
@@ -518,16 +521,20 @@ class UniversalOptimizer:
                             consumes_bulk_target = True
                             break
                 
-                # Check if we're low on euro and this process produces euro
-                current_euro = current_stocks.get('euro', 0) if 'euro' in self._stock_targets else 0
-                euro_reserve = self._get_effective_reserve('euro', current_cycle)
-                low_on_euro = current_euro < euro_reserve
+                # Check if we're low on any target resource
+                low_on_target = False
+                for target in self._stock_targets:
+                    current_target = current_stocks.get(target, 0)
+                    target_reserve = self._get_effective_reserve(target, current_cycle)
+                    if current_target < target_reserve:
+                        low_on_target = True
+                        break
                 
                 # Heavily penalize processes that consume bulk-targeted resources
-                # UNLESS we're low on euro and this produces euro (need to sell to get money)
+                # UNLESS we're low on target and this produces target (need to sell)
                 if consumes_bulk_target:
-                    if low_on_euro and net_production > 0:
-                        # Allow selling to get euro when we're low
+                    if low_on_target and net_production > 0:
+                        # Allow selling to get target resources when we're low
                         score *= 1.0  # No penalty
                     else:
                         score *= 0.0001  # Massive penalty
@@ -613,13 +620,17 @@ class UniversalOptimizer:
         # Apply bulk consumption penalties (with cash-flow mode override)
         consumes_bulk_target = any(resource in self._bulk_targets for resource in process.needs)
         if consumes_bulk_target and not self._cash_flow_mode:
-            # Check if we're low on euro
-            current_euro = current_stocks.get('euro', 0) if 'euro' in self._stock_targets else float('inf')
-            euro_reserve = self._get_effective_reserve('euro', current_cycle)
-            low_on_euro = current_euro < euro_reserve
+            # Check if we're low on any target resource
+            low_on_target = False
+            for target in self._stock_targets:
+                current_target = current_stocks.get(target, 0)
+                target_reserve = self._get_effective_reserve(target, current_cycle)
+                if current_target < target_reserve:
+                    low_on_target = True
+                    break
             
-            # Check if this process produces euro
-            produces_euro = any(
+            # Check if this process produces target resources
+            produces_target = any(
                 target in process.results and process.results[target] > process.needs.get(target, 0)
                 for target in self._stock_targets
             )
@@ -636,19 +647,19 @@ class UniversalOptimizer:
                     # Allow selling if:
                     # 1. We have excess (above bulk target)
                     # 2. We have at least 2x what we need (can afford to sell some)
-                    # 3. This process produces target resources (selling for money)
+                    # 3. This process produces target resources (selling)
                     # 4. We have at least 10% of bulk target (progressive accumulation)
                     if (current_stock > bulk_target or 
                         current_stock >= consumption * 2 or
-                        produces_euro or
+                        produces_target or
                         current_stock >= bulk_target * 0.1):
                         has_excess_or_sellable = True
                         break
             
             # Apply penalty unless:
-            # 1. We're low on euro and this produces euro (need money)
+            # 1. We're low on target and this produces target (need resources)
             # 2. We have excess or sellable amount of the consumed resource
-            if not ((low_on_euro and produces_euro) or has_excess_or_sellable):
+            if not ((low_on_target and produces_target) or has_excess_or_sellable):
                 score *= 0.0001
         
         # Apply phase-based multipliers (with cash-flow mode override)
@@ -749,7 +760,7 @@ class UniversalOptimizer:
             if not produces_bulk_needed:
                 score *= 0.00001  # Essentially block these processes
         
-        # Boost selling processes when we need euros (before penalties)
+        # Boost selling processes when we need target resources
         # Check if this process produces target resources without consuming them
         is_selling_process = False
         for target in self._stock_targets:
@@ -758,15 +769,21 @@ class UniversalOptimizer:
                 break
         
         if is_selling_process:
-            current_euro = current_stocks.get('euro', 0) if 'euro' in self._stock_targets else float('inf')
-            euro_reserve = self._get_effective_reserve('euro', current_cycle)
+            # Check if we're below reserve for any target
+            below_reserve = False
+            for target in self._stock_targets:
+                if target in process.results:
+                    current_target = current_stocks.get(target, 0)
+                    target_reserve = self._get_effective_reserve(target, current_cycle)
+                    if current_target < target_reserve:
+                        below_reserve = True
+                        break
             
             # If we're below reserve, heavily boost selling processes
-            if current_euro < euro_reserve:
-                score += 1000000.0  # Add large bonus instead of multiplying
-            # Even if above reserve, give a moderate boost to keep money flowing
+            if below_reserve:
+                score += 1000000.0  # Add large bonus
             else:
-                score += 10000.0
+                score += 10000.0  # Moderate boost to keep resources flowing
         
         # Apply delay penalty
         score -= process.delay * 1.0
@@ -784,7 +801,7 @@ class UniversalOptimizer:
         In later phases, use full reserves to protect resources for bulk execution.
         
         Args:
-            target: The target resource (e.g., 'euro')
+            target: The target resource to check reserves for
             current_cycle: Current simulation cycle
             
         Returns:
@@ -1203,25 +1220,28 @@ class UniversalOptimizer:
             # Check if this resource gatherer produces something critically needed
             produces_critical_input = False
             if is_resource_gatherer:
-                # Check if we have enough euro reserved for value chain execution
-                current_euro = current_stocks.get('euro', 0) if 'euro' in self._stock_targets else float('inf')
-                euro_reserve = self._get_effective_reserve('euro', current_cycle)
-                has_enough_euro_reserve = current_euro >= euro_reserve
+                # Check if we have enough target resources reserved
+                has_enough_reserve = True
+                for target in self._stock_targets:
+                    if target in process.needs:
+                        current_target = current_stocks.get(target, 0)
+                        target_reserve = self._get_effective_reserve(target, current_cycle)
+                        if current_target < target_reserve:
+                            has_enough_reserve = False
+                            break
                 
-                # Only allow resource gathering if we have enough euro reserved OR this produces critical input
+                # Allow if we have reserves OR produces critical input
                 for resource in process.results:
                     if resource in self._value_chain_resources:
-                        # Check if this resource is critically low
                         current_stock = current_stocks.get(resource, 0)
-                        # Check if any process in value chain needs this resource and we don't have enough
                         needed_amount = 0
                         for proc_name in self._intermediate_needs:
                             if resource in self._intermediate_needs[proc_name]:
                                 needed_amount += self._intermediate_needs[proc_name][resource] * 20
                         
                         if needed_amount > 0 and current_stock < needed_amount:
-                            # Only mark as critical if we have euro reserve OR this doesn't cost euro
-                            if has_enough_euro_reserve or 'euro' not in process.needs:
+                            consumes_target = any(t in process.needs for t in self._stock_targets)
+                            if has_enough_reserve or not consumes_target:
                                 produces_critical_input = True
                             break
             
