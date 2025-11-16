@@ -1,90 +1,150 @@
+#!/usr/bin/env python3
+"""
+krpsim_verif - Process Simulation Trace Verifier
+
+Main executable for verifying execution traces against configuration files
+to ensure they represent valid simulation runs.
+
+Usage:
+    python krpsim_verif.py <config_file.krpsim> <trace_file.txt>
+
+Arguments:
+    config_file: Path to configuration file (must end with .krpsim)
+    trace_file: Path to trace file (must end with .txt)
+"""
+
 import sys
-import heapq
+import os
+from typing import Optional
 
-from typing import Tuple, Dict, List
-from common import parse_config, Process
+# Add src directory to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-def parse_result_set(result_set_file: str) -> Tuple[List[Tuple[int, str]], int]:
-    timeline: List[Tuple[int, str]] = []
-    end_cycle_nbr: int = 0
+from src.verifier import TraceVerifier
+from src.data_models import VerificationResult, VerificationError, ConfigurationError
 
-    with open(result_set_file) as f:
-        for line in f:
-            if ':' in line:
-                time, process_name = line.strip().split(":")
-                timeline.append((int(time), process_name))
-            else:
-                end_cycle_nbr = int(line)
 
-    return timeline, end_cycle_nbr
-
-def verify(
-        stocks: Dict[str, int],
-        processes: List[Process],
-        timeline: List[Tuple[int, str]],
-        end_cycle_nbr: int) -> bool:
-    processes_in_progress: List[Tuple[int, Process]] = []
-    idx: int = 0
-
-    for cycle_nbr, process_name in timeline:
-        while idx < cycle_nbr:
-            idx += 1
-            terminate_ongoing_processes(processes_in_progress, idx, stocks)
-
-        process_as_list: List[Process] = [ proc for proc in processes if proc.name == process_name ]
-        if not process_as_list:
-            print(f"Error: Unknown process '{process_name}' at {cycle_nbr}")
-            return False
-        
-        process = process_as_list[0]
-        for name, qty in process.needs.items():
-            if stocks.get(name, 0) < qty:
-                print(f"Error at {cycle_nbr}: not enough '{name}' for process '{process.name}'")
-                return False
-            stocks[name] -= qty
-
-        heapq.heappush(processes_in_progress, (cycle_nbr + process.delay, process))
-        idx = cycle_nbr
-        
-    while processes_in_progress:
-        idx += 1
-        terminate_ongoing_processes(processes_in_progress, idx, stocks)
+def parse_arguments() -> tuple[str, str]:
+    """
+    Parse and validate command-line arguments.
     
-    if idx != end_cycle_nbr:
-        print("The finish time does not correspond")
-        return False
-
-    return True
-
-def terminate_ongoing_processes(
-        processes_in_progress: List[Tuple[int, Process]],
-        cycle_nbr: int,
-        stocks: Dict[str, int]
-) -> None:
-    while processes_in_progress and processes_in_progress[0][0] == cycle_nbr:
-        _, process = heapq.heappop(processes_in_progress)
+    Returns:
+        Tuple of (config_file, trace_file)
         
-        for name, qty in process.results.items():
-            stocks[name] = stocks.get(name, 0) + qty
+    Raises:
+        SystemExit: If arguments are invalid
+    """
+    if len(sys.argv) != 3:
+        print("Error: Wrong number of arguments", file=sys.stderr)
+        print("Usage: python krpsim_verif.py <config_file.krpsim> <trace_file.txt>", file=sys.stderr)
+        sys.exit(1)
+    
+    config_file = sys.argv[1]
+    trace_file = sys.argv[2]
+    
+    # Validate config file extension
+    if not config_file.endswith(".krpsim"):
+        print("Error: Configuration file must have .krpsim extension", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate trace file extension
+    if not trace_file.endswith(".txt"):
+        print("Error: Trace file must have .txt extension", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate config file exists
+    if not os.path.exists(config_file):
+        print(f"Error: Configuration file not found: {config_file}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate trace file exists
+    if not os.path.exists(trace_file):
+        print(f"Error: Trace file not found: {trace_file}", file=sys.stderr)
+        sys.exit(1)
+    
+    return config_file, trace_file
+
+
+def verify_trace(config_file: str, trace_file: str) -> VerificationResult:
+    """
+    Verify a trace file against a configuration file.
+    
+    Args:
+        config_file: Path to configuration file
+        trace_file: Path to trace file
+        
+    Returns:
+        VerificationResult object with validation outcome
+    """
+    try:
+        # Create verifier (it will load config internally)
+        verifier = TraceVerifier(initial_stocks={}, processes=[])
+        
+        # Verify trace file
+        result = verifier.verify_trace_file(config_file, trace_file)
+        
+        return result
+        
+    except Exception as e:
+        # Catch any unexpected errors
+        return VerificationResult(
+            is_valid=False,
+            error_message=f"Unexpected error: {str(e)}"
+        )
+
+
+def display_verification_result(result: VerificationResult) -> None:
+    """
+    Display verification result to user.
+    
+    Args:
+        result: VerificationResult to display
+    """
+    if result.is_valid:
+        print("Validation completed :)")
+        
+        # Display final stocks if available
+        if result.final_stocks:
+            print("\nFinal stocks:")
+            for resource, quantity in sorted(result.final_stocks.items()):
+                print(f"  {resource}: {quantity}")
+        
+        # Display final cycle
+        if result.final_cycle > 0:
+            print(f"\nSimulation completed at cycle: {result.final_cycle}")
+    else:
+        print("Validation failed :(")
+        
+        # Display error details
+        if result.error_message:
+            print(f"\n{result.get_error_description()}")
+
+
+def main() -> int:
+    """
+    Main entry point for krpsim_verif.
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    # Parse command-line arguments
+    config_file, trace_file = parse_arguments()
+    
+    # Display start message
+    print("Parsing config file and validating result set...")
+    
+    # Verify trace
+    result = verify_trace(config_file, trace_file)
+    
+    # Display evaluation message
+    print("Evaluating .................. done.")
+    
+    # Display results
+    display_verification_result(result)
+    
+    # Return exit code based on validation result
+    return 0 if result.is_valid else 1
+
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Wrong number of arguments")
-        sys.exit()
-    
-    config_file: str = sys.argv[1]
-    if not config_file.endswith(".krpsim"):
-        print("Wrong config file extension")
-        sys.exit()
-    
-    result_set = sys.argv[2]
-    if not result_set.endswith(".txt"):
-        print("Wrong result set file extension")
-        sys.exit()
-
-    print("Parsing config file and validating result set...")
-    stocks, processes, _ = parse_config(config_file)
-    timeline, final_time = parse_result_set(result_set)
-    print("Evaluating .................. done.")
-    is_correct = verify(stocks, processes, timeline, final_time)
-    print("Validation completed :)" if is_correct else "Validation failed :(")
+    sys.exit(main())
