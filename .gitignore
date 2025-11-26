@@ -4,3 +4,4 @@
 env/
 .kiro
 tests/
+result_set.txt

@@ -2,14 +2,12 @@ import os
 import sys
 import traceback
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
 from typing import Optional
 
-from src.common import parse_config_to_simulation
-from src.simulation_engine import SimulationEngine
-from src.output_formatter import OutputFormatter
-from src.data_models import SimulationConfig, ConfigurationError, SimulationError
+from common import parse_config_to_simulation
+from simulation_engine import SimulationEngine
+from output_formatter import OutputFormatter
+from data_models import SimulationConfig, ConfigurationError, SimulationError
 
 RESULT_FILE = "result_set.txt"
 

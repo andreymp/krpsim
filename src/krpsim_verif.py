@@ -2,10 +2,8 @@ import sys
 import os
 from typing import Optional
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from src.verifier import TraceVerifier
-from src.data_models import VerificationResult, VerificationError, ConfigurationError
+from .verifier import TraceVerifier
+from .data_models import VerificationResult, VerificationError, ConfigurationError
 
 
 def parse_arguments() -> tuple[str, str]:
@@ -42,7 +40,6 @@ def verify_trace(config_file: str, trace_file: str) -> VerificationResult:
         return verifier.verify_trace_file(config_file, trace_file)
         
     except Exception as e:
-        # Catch any unexpected errors
         return VerificationResult(
             is_valid=False,
             error_message=f"Unexpected error: {str(e)}"

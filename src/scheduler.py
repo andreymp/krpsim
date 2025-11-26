@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 
-from src.common import Process
-from src.data_models import ProcessExecution, SchedulingError
+from common import Process
+from data_models import ProcessExecution, SchedulingError
 
 
 @dataclass

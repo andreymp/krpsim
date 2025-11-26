@@ -1,7 +1,9 @@
 import heapq
+
 from typing import Dict, List, Tuple, Optional
-from src.common import Process, parse_config
-from src.data_models import (
+
+from .common import Process, parse_config
+from .data_models import (
     TraceEntry, VerificationResult, VerificationError,
     ConfigurationError
 )

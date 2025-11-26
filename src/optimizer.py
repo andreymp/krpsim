@@ -1,6 +1,8 @@
 import math
+
 from typing import Dict, List, Optional, Set, Tuple
-from src.common import Process
+
+from common import Process
 
 class Optimizer:
     def __init__(self, optimization_targets: List[str], all_processes: Optional[List[Process]] = None, total_cycles: int = 0):

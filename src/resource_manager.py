@@ -1,6 +1,8 @@
 from typing import Dict, List
+
 from dataclasses import dataclass
-from src.data_models import ResourceError
+
+from data_models import ResourceError
 
 class ResourceManager:
     def __init__(self, initial_stocks: Dict[str, int]):

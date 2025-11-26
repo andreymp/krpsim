@@ -2,31 +2,7 @@ import os
 
 from typing import Dict, Tuple, List
 
-from src.data_models import SimulationConfig
-
-class Process:
-    def __init__(self, name: str, needs: Dict[str, int], results: Dict[str, int], delay: int):
-        self.name: str = name
-        self.needs: Dict[str, int] = needs
-        self.results: Dict[str, int] = results
-        self.delay: int = delay
-        self.start_times: List[int] = []
-        self.priority_score: float = 0.0
-        self.execution_count: int = 0
-        self.last_execution_cycle: int = -1
-    
-    def calculate_resource_efficiency(self) -> float:
-        if not self.needs:
-            return float('inf')
-        
-        input_cost = sum(self.needs.values())
-        output_value = sum(self.results.values())
-        return output_value / input_cost if input_cost > 0 else 0.0
-    
-    def record_execution(self, start_cycle: int) -> None:
-        self.start_times.append(start_cycle)
-        self.execution_count += 1
-        self.last_execution_cycle = start_cycle
+from data_models import SimulationConfig, Process
 
 def parse_config(config_file: str) -> Tuple[Dict[str, int], List[Process], List[str]]:
     stocks: Dict[str, int] = {}

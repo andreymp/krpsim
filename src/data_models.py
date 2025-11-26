@@ -1,15 +1,29 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, TYPE_CHECKING, Any
+from typing import Dict, List, Optional, Any
 from enum import Enum
 
-if TYPE_CHECKING:
-    from src.common import Process
+
+class Process:    
+    def __init__(self, name: str, needs: Dict[str, int], results: Dict[str, int], delay: int):
+        self.name: str = name
+        self.needs: Dict[str, int] = needs
+        self.results: Dict[str, int] = results
+        self.delay: int = delay
+        self.start_times: List[int] = []
+        self.priority_score: float = 0.0
+        self.execution_count: int = 0
+        self.last_execution_cycle: int = -1
+    
+    def record_execution(self, start_cycle: int) -> None:
+        self.start_times.append(start_cycle)
+        self.execution_count += 1
+        self.last_execution_cycle = start_cycle
 
 
 @dataclass
 class SimulationConfig:
     initial_stocks: Dict[str, int]
-    processes: List['Process']
+    processes: List[Process]
     optimization_targets: List[str]
     max_delay: int
     config_file: Optional[str] = None

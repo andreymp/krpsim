@@ -1,10 +1,10 @@
 from typing import List
 
-from src.data_models import SimulationConfig, SimulationResult, SimulationError, ResourceError
-from src.resource_manager import ResourceManager
-from src.scheduler import Scheduler
-from src.optimizer import Optimizer
-from src.common import Process
+from data_models import SimulationConfig, SimulationResult, SimulationError, ResourceError
+from resource_manager import ResourceManager
+from scheduler import Scheduler
+from optimizer import Optimizer
+from common import Process
 
 class SimulationEngine:
     def __init__(self, config: SimulationConfig):

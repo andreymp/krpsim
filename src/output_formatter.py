@@ -2,7 +2,7 @@ import sys
 
 from typing import Dict, Optional, TextIO
 
-from src.data_models import SimulationResult, TraceEntry, VerificationResult
+from data_models import SimulationResult, TraceEntry, VerificationResult
 
 
 class OutputFormatter:
