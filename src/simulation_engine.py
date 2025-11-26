@@ -135,11 +135,7 @@ class SimulationEngine:
                 process.needs,
                 current_cycle
             )
-            self._scheduler.schedule_process(
-                process,
-                resources_consumed=process.needs,
-                resources_to_produce=process.results
-            )
+            self._scheduler.schedule_process(process)
         except ResourceError:
             raise
         except Exception as e:

@@ -2,6 +2,8 @@ import os
 import sys
 import traceback
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from typing import Optional
 
 from src.common import parse_config_to_simulation
@@ -10,8 +12,6 @@ from src.output_formatter import OutputFormatter
 from src.data_models import SimulationConfig, ConfigurationError, SimulationError
 
 RESULT_FILE = "result_set.txt"
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def parse_arguments() -> tuple[str, int]:
     if len(sys.argv) != 3:
@@ -47,11 +47,12 @@ def load_configuration(config_file: str, max_delay: int) -> Optional[SimulationC
         return parse_config_to_simulation(config_file, max_delay)
     except ConfigurationError as e:
         print(f"Configuration Error: {e}")
+        return None
     except ValueError as e:
         print(f"Configuration Error: {e}")
+        return None
     except Exception as e:
         print(f"Unexpected error loading configuration: {e}")
-    finally:
         return None
 
 
@@ -83,7 +84,10 @@ def run_simulation(config: SimulationConfig, formatter: OutputFormatter) -> bool
         formatter.display_message("")
         formatter.display_message(formatter.format_final_stocks(result.final_stocks))
         
-        os.makedirs(os.path.dirname(RESULT_FILE), exist_ok=True)
+        # Create directory for result file if it has a directory component
+        result_dir = os.path.dirname(RESULT_FILE)
+        if result_dir:
+            os.makedirs(result_dir, exist_ok=True)
         formatter.write_trace_file(result, RESULT_FILE)
         
         return True
