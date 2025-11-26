@@ -1,9 +1,9 @@
 from typing import Dict, List, Optional, Set, Tuple
 from src.common import Process
 
-class UniversalOptimizer:
+class Optimizer:
     def __init__(self, optimization_targets: List[str], all_processes: Optional[List[Process]] = None, total_cycles: int = 0):
-        self.targets = [t for t in optimization_targets if t != 'time']
+        self.targets = [target for target in optimization_targets if target != 'time']
         self.cycles = total_cycles
         self.hv_procs: Set[str] = set()
         self.vc_res: Set[str] = set()
@@ -21,28 +21,35 @@ class UniversalOptimizer:
     def _analyze(self, procs: List[Process]) -> None:
         if self.analyzed or not self.targets:
             return
-        max_net = {t: max((p.results.get(t, 0) - p.needs.get(t, 0) for p in procs if t in p.results), default=0) for t in self.targets}
-        for p in procs:
-            for t in self.targets:
-                if t in p.results:
-                    net = p.results[t] - p.needs.get(t, 0)
-                    if net > 1000 or (p.needs.get(t, 0) > 0 and net > 50 * p.needs[t]) or p.results[t] > 10000 or (max_net[t] > 0 and net >= max_net[t] * 0.5):
-                        self.hv_procs.add(p.name)
-                        for r, q in p.needs.items():
-                            if r not in self.targets:
-                                self.needs.setdefault(p.name, {})[r] = q
+
+        max_net = {
+            target: max((proc.results.get(target, 0) - proc.needs.get(target, 0) for proc in procs if target in proc.results), default=0) 
+            for target in self.targets
+        }
+        for proc in procs:
+            for target in self.targets:
+                if target in proc.results:
+                    net = proc.results[target] - proc.needs.get(target, 0)
+                    if (net > 1000 
+                        or (proc.needs.get(target, 0) > 0 and net > 50 * proc.needs[target]) 
+                        or proc.results[target] > 10000 
+                        or (max_net[target] > 0 and net >= max_net[target] * 0.5)
+                    ):
+                        self.hv_procs.add(proc.name)
+                        for name, qty in proc.needs.items():
+                            if name not in self.targets:
+                                self.needs.setdefault(proc.name, {})[name] = qty
                         break
-        for p in procs:
-            if p.name in self.hv_procs:
-                self._deps(p, procs, set())
-        for p in procs:
-            if any(r in self.vc_res for r in p.results) and p.name not in self.hv_procs:
-                # Skip conversion loops
+        for proc in procs:
+            if proc.name in self.hv_procs:
+                self._deps(proc, procs, set())
+        for proc in procs:
+            if any(result in self.vc_res for result in proc.results) and proc.name not in self.hv_procs:
                 is_loop = False
-                for ro in p.results:
-                    for ri in p.needs:
+                for ro in proc.results:
+                    for ri in proc.needs:
                         for op in procs:
-                            if op.name != p.name and ri in op.results and ro in op.needs:
+                            if op.name != proc.name and ri in op.results and ro in op.needs:
                                 is_loop = True
                                 break
                         if is_loop:
@@ -50,9 +57,9 @@ class UniversalOptimizer:
                     if is_loop:
                         break
                 if not is_loop:
-                    for r, q in p.needs.items():
-                        if r not in self.targets:
-                            self.needs.setdefault(p.name, {})[r] = q
+                    for name, qty in proc.needs.items():
+                        if name not in self.targets:
+                            self.needs.setdefault(proc.name, {})[name] = qty
         for hv in self.hv_procs:
             for p in procs:
                 if p.name == hv:
@@ -90,13 +97,13 @@ class UniversalOptimizer:
                         self.reserves[t] = max(self.reserves.get(t, 0), int(p.needs[t] * m * self.mult))
         self.analyzed = True
     
-    def _deps(self, p: Process, procs: List[Process], vis: Set[str]) -> None:
-        for r in p.needs:
-            if r not in vis:
-                self.vc_res.add(r)
-                vis.add(r)
+    def _deps(self, proc: Process, procs: List[Process], vis: Set[str]) -> None:
+        for need in proc.needs:
+            if need not in vis:
+                self.vc_res.add(need)
+                vis.add(need)
                 for pr in procs:
-                    if r in pr.results:
+                    if need in pr.results:
                         self._deps(pr, procs, vis)
     
     def _phase(self, stocks: Dict[str, int], cycle: int) -> str:
