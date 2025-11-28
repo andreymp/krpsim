@@ -2,8 +2,8 @@ import sys
 import os
 from typing import Optional
 
-from .verifier import TraceVerifier
-from .data_models import VerificationResult, VerificationError, ConfigurationError
+from verifier import TraceVerifier
+from data_models import VerificationResult, VerificationError, ConfigurationError
 
 
 def parse_arguments() -> tuple[str, str]:
